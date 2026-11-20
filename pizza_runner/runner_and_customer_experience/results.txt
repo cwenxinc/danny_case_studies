@@ -1,0 +1,437 @@
+**Schema (PostgreSQL v13)**
+
+    CREATE SCHEMA pizza_runner;
+    SET search_path = pizza_runner;
+    
+    DROP TABLE IF EXISTS runners;
+    CREATE TABLE runners (
+      "runner_id" INTEGER,
+      "registration_date" DATE
+    );
+    INSERT INTO runners
+      ("runner_id", "registration_date")
+    VALUES
+      (1, '2021-01-01'),
+      (2, '2021-01-03'),
+      (3, '2021-01-08'),
+      (4, '2021-01-15');
+    
+    
+    DROP TABLE IF EXISTS customer_orders;
+    CREATE TABLE customer_orders (
+      "order_id" INTEGER,
+      "customer_id" INTEGER,
+      "pizza_id" INTEGER,
+      "exclusions" VARCHAR(4),
+      "extras" VARCHAR(4),
+      "order_time" TIMESTAMP
+    );
+    
+    INSERT INTO customer_orders
+      ("order_id", "customer_id", "pizza_id", "exclusions", "extras", "order_time")
+    VALUES
+      ('1', '101', '1', '', '', '2020-01-01 18:05:02'),
+      ('2', '101', '1', '', '', '2020-01-01 19:00:52'),
+      ('3', '102', '1', '', '', '2020-01-02 23:51:23'),
+      ('3', '102', '2', '', NULL, '2020-01-02 23:51:23'),
+      ('4', '103', '1', '4', '', '2020-01-04 13:23:46'),
+      ('4', '103', '1', '4', '', '2020-01-04 13:23:46'),
+      ('4', '103', '2', '4', '', '2020-01-04 13:23:46'),
+      ('5', '104', '1', 'null', '1', '2020-01-08 21:00:29'),
+      ('6', '101', '2', 'null', 'null', '2020-01-08 21:03:13'),
+      ('7', '105', '2', 'null', '1', '2020-01-08 21:20:29'),
+      ('8', '102', '1', 'null', 'null', '2020-01-09 23:54:33'),
+      ('9', '103', '1', '4', '1, 5', '2020-01-10 11:22:59'),
+      ('10', '104', '1', 'null', 'null', '2020-01-11 18:34:49'),
+      ('10', '104', '1', '2, 6', '1, 4', '2020-01-11 18:34:49');
+    
+    
+    DROP TABLE IF EXISTS runner_orders;
+    CREATE TABLE runner_orders (
+      "order_id" INTEGER,
+      "runner_id" INTEGER,
+      "pickup_time" VARCHAR(19),
+      "distance" VARCHAR(7),
+      "duration" VARCHAR(10),
+      "cancellation" VARCHAR(23)
+    );
+    
+    INSERT INTO runner_orders
+      ("order_id", "runner_id", "pickup_time", "distance", "duration", "cancellation")
+    VALUES
+      ('1', '1', '2020-01-01 18:15:34', '20km', '32 minutes', ''),
+      ('2', '1', '2020-01-01 19:10:54', '20km', '27 minutes', ''),
+      ('3', '1', '2020-01-03 00:12:37', '13.4km', '20 mins', NULL),
+      ('4', '2', '2020-01-04 13:53:03', '23.4', '40', NULL),
+      ('5', '3', '2020-01-08 21:10:57', '10', '15', NULL),
+      ('6', '3', 'null', 'null', 'null', 'Restaurant Cancellation'),
+      ('7', '2', '2020-01-08 21:30:45', '25km', '25mins', 'null'),
+      ('8', '2', '2020-01-10 00:15:02', '23.4 km', '15 minute', 'null'),
+      ('9', '2', 'null', 'null', 'null', 'Customer Cancellation'),
+      ('10', '1', '2020-01-11 18:50:20', '10km', '10minutes', 'null');
+    
+    
+    DROP TABLE IF EXISTS pizza_names;
+    CREATE TABLE pizza_names (
+      "pizza_id" INTEGER,
+      "pizza_name" TEXT
+    );
+    INSERT INTO pizza_names
+      ("pizza_id", "pizza_name")
+    VALUES
+      (1, 'Meatlovers'),
+      (2, 'Vegetarian');
+    
+    
+    DROP TABLE IF EXISTS pizza_recipes;
+    CREATE TABLE pizza_recipes (
+      "pizza_id" INTEGER,
+      "toppings" TEXT
+    );
+    INSERT INTO pizza_recipes
+      ("pizza_id", "toppings")
+    VALUES
+      (1, '1, 2, 3, 4, 5, 6, 8, 10'),
+      (2, '4, 6, 7, 9, 11, 12');
+    
+    
+    DROP TABLE IF EXISTS pizza_toppings;
+    CREATE TABLE pizza_toppings (
+      "topping_id" INTEGER,
+      "topping_name" TEXT
+    );
+    INSERT INTO pizza_toppings
+      ("topping_id", "topping_name")
+    VALUES
+      (1, 'Bacon'),
+      (2, 'BBQ Sauce'),
+      (3, 'Beef'),
+      (4, 'Cheese'),
+      (5, 'Chicken'),
+      (6, 'Mushrooms'),
+      (7, 'Onions'),
+      (8, 'Pepperoni'),
+      (9, 'Peppers'),
+      (10, 'Salami'),
+      (11, 'Tomatoes'),
+      (12, 'Tomato Sauce');
+
+---
+
+**Query #1**
+
+    /* --------------------
+       Pizza Runner Case Study: 
+       Danny started a pizza business called "Pizza Runner" and recruited
+       "runners" to deliver fresh pizza from Pizza Runner Headquarters to 
+       his customers. He wants to better direct his runners and optimize 
+       Pizza Runner's operations.
+       -------------------- */
+       
+       -- reconcile data inconsistencies in customer_orders and runner_orders before analysis
+       
+       -- standardize null value representation in exclusions and extras
+       CREATE TABLE customer_orders_clean AS
+       SELECT
+       		order_id, 
+            customer_id, 
+            pizza_id,
+            NULLIF(NULLIF(exclusions, 'null'), '') AS exclusions_clean, 
+            NULLIF(NULLIF(extras, 'null'), '') AS extras_clean, 
+            order_time
+       FROM pizza_runner.customer_orders;
+
+There are no results to be displayed.
+
+---
+**Query #2**
+
+       -- standardize null value representation in pickup_time, distance, duration, and cancellation
+       -- strip distance and duration of all non-numeric characters
+       -- convert the data types of pickup_time, distance, and duration
+       CREATE TABLE runner_orders_clean AS
+       SELECT
+       		order_id,  
+            runner_id,
+            CAST(
+              	NULLIF(pickup_time, 'null') 
+              	AS TIMESTAMP
+            ) AS pickup_time_clean,
+            CAST(
+              	NULLIF(REGEXP_REPLACE(distance, '[^\d.]', '', 'g'), '')
+              	AS NUMERIC
+            ) AS distance_clean, 
+            CAST(
+              	NULLIF(REGEXP_REPLACE(duration, '[^\d]', '', 'g'), '')
+              	AS INTEGER
+            ) AS duration_clean, 
+            NULLIF(NULLIF(cancellation, 'null'), '') AS cancellation_clean
+       FROM pizza_runner.runner_orders;
+
+There are no results to be displayed.
+
+---
+**Query #3**
+
+    /* -------------------- 
+       B. Runner and Customer Experience
+       -------------------- */
+       
+       -- 1. How many runners signed up for each 1 week period? (i.e. **week starts 2021-01-01**)
+       -- group registration dates into consecutive 7-day intervals and mark each interval by the start date of the week
+       SELECT
+       		DATE '2021-01-01' 
+            	+ ((registration_date - DATE '2021-01-01') / 7) * 7
+            AS signup_week, 
+            COUNT(runner_id) AS n_runners
+       FROM pizza_runner.runners
+       GROUP BY signup_week
+       ORDER BY signup_week;
+
+| signup_week | n_runners |
+| ----------- | --------- |
+| 2021-01-01  | 2         |
+| 2021-01-08  | 1         |
+| 2021-01-15  | 1         |
+
+---
+**Query #4**
+
+    -- 2. What was the average time in minutes it took for each runner **to arrive at the Pizza Runner HQ** to pickup the order?
+       WITH orders_with_pickup AS (
+         	SELECT
+       			DISTINCT c.order_id, -- do not count the same order multiple times
+            	c.order_time, 
+            	r.pickup_time_clean,
+         		CEIL(
+                  EXTRACT(EPOCH FROM r.pickup_time_clean - c.order_time) / 60.0
+                ) AS minutes_to_pickup,
+            	r.runner_id
+       		FROM customer_orders_clean c
+       		JOIN runner_orders_clean r ON c.order_id = r.order_id
+      		WHERE r.pickup_time_clean IS NOT NULL
+       )
+       SELECT
+       		runner_id, 
+            CEIL(AVG(minutes_to_pickup)) AS avg_min_to_pickup
+       FROM orders_with_pickup
+       GROUP BY runner_id
+       ORDER BY runner_id;
+
+| runner_id | avg_min_to_pickup |
+| --------- | ----------------- |
+| 1         | 15                |
+| 2         | 21                |
+| 3         | 11                |
+
+---
+**Query #5**
+
+    -- 3. Is there any relationship between the number of pizzas and how long the order takes to prepare?
+       -- it seems that preparation time increases with pizza volume
+       SELECT
+       		COUNT(c.pizza_id) OVER(
+              PARTITION BY c.order_id
+            ) AS n_pizzas_ordered,
+            CEIL(
+              EXTRACT(EPOCH FROM r.pickup_time_clean - c.order_time) / 60.0
+            ) AS prep_time -- estimate preparation time by the time from order to pickup
+       FROM customer_orders_clean c
+       JOIN runner_orders_clean r ON c.order_id = r.order_id
+       WHERE r.pickup_time_clean IS NOT NULL
+       ORDER BY n_pizzas_ordered;
+
+| n_pizzas_ordered | prep_time |
+| ---------------- | --------- |
+| 1                | 21        |
+| 1                | 11        |
+| 1                | 11        |
+| 1                | 11        |
+| 1                | 11        |
+| 2                | 16        |
+| 2                | 22        |
+| 2                | 22        |
+| 2                | 16        |
+| 3                | 30        |
+| 3                | 30        |
+| 3                | 30        |
+
+---
+**Query #6**
+
+    -- typically the more pizzas ordered, the longer the preparation takes
+       WITH order_summary AS (
+         SELECT
+       		COUNT(c.pizza_id) OVER(
+              PARTITION BY c.order_id
+            ) AS n_pizzas_ordered,
+            CEIL(
+              EXTRACT(EPOCH FROM r.pickup_time_clean - c.order_time) / 60.0
+            ) AS prep_time
+         FROM customer_orders_clean c
+         JOIN runner_orders_clean r ON c.order_id = r.order_id
+         WHERE r.pickup_time_clean IS NOT NULL
+       )
+       SELECT
+       		n_pizzas_ordered, 
+            AVG(prep_time) AS avg_prep_time
+       FROM order_summary
+       GROUP BY n_pizzas_ordered
+       ORDER BY n_pizzas_ordered;
+
+| n_pizzas_ordered | avg_prep_time |
+| ---------------- | ------------- |
+| 1                | 13            |
+| 2                | 19            |
+| 3                | 30            |
+
+---
+**Query #7**
+
+    -- 4. What was the average distance travelled for each customer?
+       WITH orders_delivered AS (
+         	SELECT
+       			DISTINCT c.order_id, -- do not count the same order multiple times
+            	c.customer_id, 
+            	r.distance_clean
+         	FROM customer_orders_clean c
+         	JOIN runner_orders_clean r ON c.order_id = r.order_id
+         	WHERE r.distance_clean IS NOT NULL
+       )
+       SELECT
+       		customer_id, 
+            ROUND(AVG(distance_clean), 1) AS avg_km_travelled
+       FROM orders_delivered
+       GROUP BY customer_id
+       ORDER BY customer_id;
+
+| customer_id | avg_km_travelled |
+| ----------- | ---------------- |
+| 101         | 20.0             |
+| 102         | 18.4             |
+| 103         | 23.4             |
+| 104         | 10.0             |
+| 105         | 25.0             |
+
+---
+**Query #8**
+
+    -- 5. What was the difference between the longest and shortest delivery times for all orders?
+       SELECT
+       		MAX(duration_clean) AS longest_delivery_time,
+            MIN(duration_clean) AS shortest_delivery_time, 
+            MAX(duration_clean) - MIN(duration_clean) AS time_diff
+       FROM customer_orders_clean c
+       JOIN runner_orders_clean r ON c.order_id = r.order_id
+       WHERE duration_clean IS NOT NULL;
+
+| longest_delivery_time | shortest_delivery_time | time_diff |
+| --------------------- | ---------------------- | --------- |
+| 40                    | 10                     | 30        |
+
+---
+**Query #9**
+
+    -- 6. What was the average **speed** for each runner for each delivery and do you notice any trend for these values?
+       -- runners generally pick up their speed with each new order
+       SELECT
+       		DISTINCT c.order_id,
+            r.runner_id, 
+            ROUND(r.distance_clean / (r.duration_clean / 60.0), 1) AS km_h
+       FROM customer_orders_clean c
+       JOIN runner_orders_clean r ON c.order_id = r.order_id
+       WHERE duration_clean IS NOT NULL AND
+       		distance_clean IS NOT NULL
+       ORDER BY 
+       		r.runner_id, 
+            c.order_id;
+
+| order_id | runner_id | km_h |
+| -------- | --------- | ---- |
+| 1        | 1         | 37.5 |
+| 2        | 1         | 44.4 |
+| 3        | 1         | 40.2 |
+| 10       | 1         | 60.0 |
+| 4        | 2         | 35.1 |
+| 7        | 2         | 60.0 |
+| 8        | 2         | 93.6 |
+| 5        | 3         | 40.0 |
+
+---
+**Query #10**
+
+    -- overall, speed increases with each new order as well
+       SELECT
+       		DISTINCT c.order_id,
+            r.runner_id, 
+            ROUND(r.distance_clean / (r.duration_clean / 60.0), 1) AS km_h
+       FROM customer_orders_clean c
+       JOIN runner_orders_clean r ON c.order_id = r.order_id
+       WHERE duration_clean IS NOT NULL AND
+       		distance_clean IS NOT NULL
+       ORDER BY c.order_id;
+
+| order_id | runner_id | km_h |
+| -------- | --------- | ---- |
+| 1        | 1         | 37.5 |
+| 2        | 1         | 44.4 |
+| 3        | 1         | 40.2 |
+| 4        | 2         | 35.1 |
+| 5        | 3         | 40.0 |
+| 7        | 2         | 60.0 |
+| 8        | 2         | 93.6 |
+| 10       | 1         | 60.0 |
+
+---
+**Query #11**
+
+    -- runner 2 has the highest average speed
+       WITH delivery_speeds AS (
+         	SELECT
+       			DISTINCT c.order_id, -- remove duplicate records
+            	r.runner_id, 
+            	r.distance_clean / (r.duration_clean / 60.0) AS km_h
+         	FROM customer_orders_clean c
+         	JOIN runner_orders_clean r ON c.order_id = r.order_id
+         	WHERE duration_clean IS NOT NULL AND
+       			distance_clean IS NOT NULL
+         	ORDER BY c.order_id
+       )
+       SELECT
+       		runner_id, 
+            ROUND(AVG(km_h), 1) AS avg_km_h
+       FROM delivery_speeds
+       GROUP BY runner_id
+       ORDER BY avg_km_h DESC;
+
+| runner_id | avg_km_h |
+| --------- | -------- |
+| 2         | 62.9     |
+| 1         | 45.5     |
+| 3         | 40.0     |
+
+---
+**Query #12**
+
+    -- 7. What is the successful delivery percentage for each runner?
+       SELECT
+       		runner_id,
+            COUNT(order_id) AS n_orders,
+            SUM(CASE WHEN cancellation_clean IS NULL THEN 1 ELSE 0 END) AS n_deliveries, 
+            ROUND(100 * 
+                  SUM(CASE WHEN cancellation_clean IS NULL THEN 1 ELSE 0 END)
+                  / COUNT(order_id)::NUMERIC
+            ) AS success_pct -- decimals prevent integer division
+       FROM runner_orders_clean
+       GROUP BY runner_id
+       ORDER BY runner_id;
+
+| runner_id | n_orders | n_deliveries | success_pct |
+| --------- | -------- | ------------ | ----------- |
+| 1         | 4        | 4            | 100         |
+| 2         | 4        | 3            | 75          |
+| 3         | 2        | 1            | 50          |
+
+---
+
+[View on DB Fiddle](https://www.db-fiddle.com/f/7VcQKQwsS3CTkGRFG7vu98/4374)
